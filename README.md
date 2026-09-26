@@ -1,16 +1,10 @@
 # EC2 e AWS Systems Manager Session Manager Port Forwarding
 
-Laboratório Terraform para acessar um n8n na porta `5678` de uma EC2 privada pelo Session Manager. A rede é criada e mantida pelo projeto [`aws-vpc`](../aws-vpc), seguindo o mesmo padrão de código e consulta ao Parameter Store do [`aws-session-manager`](../aws-session-manager).
+Laboratório Terraform para acessar o n8n na porta `5678` de uma EC2 privada pelo Session Manager. A rede é criada e mantida pelo projeto [`aws-vpc`](../aws-vpc), seguindo o mesmo padrão de código e consulta ao Parameter Store do [`aws-session-manager`](../aws-session-manager).
 
 ## Arquitetura
 
-```mermaid
-flowchart LR
-    Local["Computador: localhost:8080"] --> SSM["Session Manager"]
-    EC2["EC2 privada A: SSM Agent"] --> NAT["NAT Gateway existente"]
-    NAT --> SSM
-    EC2 --> HTTP["n8n:5678 na mesma EC2"]
-```
+![Arquitetura do port forwarding via Session Manager e NAT Gateway](docs/arch.png)
 
 O túnel encaminha a porta local `8080` para a porta `5678` da própria EC2. A instância usa Amazon Linux 2023 ARM64, Graviton `t4g.small`, disco `gp3` criptografado e IMDSv2 obrigatório. Não recebe IP público nem chave SSH. Seu security group não possui regras de entrada e permite saída TCP 443 para comunicação com o Systems Manager e download dos pacotes e da imagem Docker.
 
@@ -24,7 +18,6 @@ Todos os arquivos `.tf` ficam na raiz e compartilham um único backend, provider
 | `providers.tf` | Provider AWS e região |
 | `variables.tf` | Variáveis de entrada |
 | `vpc_data.tf` | IDs da rede pelo Parameter Store |
-| `vpc_outputs.tf` | Outputs da rede consumida |
 | `ec2_session_manager_port_forwarding_data.tf` | AMI pública Amazon Linux 2023 ARM64 pelo SSM |
 | `ec2_session_manager_port_forwarding_instance.tf` | EC2 e inicialização do SSM Agent |
 | `ec2_session_manager_port_forwarding_iam.tf` | Role, política SSM e instance profile |
@@ -65,8 +58,6 @@ Revise o plano antes do apply: ele cria uma EC2, disco, recursos IAM e security 
 ## Consultar os outputs
 
 ```bash
-terraform output vpc_id
-terraform output private_subnet_1a_id
 terraform output ec2_session_manager_port_forwarding_instance_id
 terraform output ec2_session_manager_port_forwarding_private_ip
 terraform output -raw ec2_session_manager_command
@@ -111,7 +102,9 @@ Depois de iniciar o container, no seu computador, copie e execute o comando exib
 terraform output -raw ec2_session_manager_port_forwarding_command
 ```
 
-O comando tem este formato, com o ID real da instância:
+Use `-raw` para copiar o comando sem as aspas e escapes da apresentação do Terraform. O output usa o ID da EC2 gerenciada pelo estado atual.
+
+O comando tem este formato; substitua o ID ilustrativo pelo ID atual da instância:
 
 ```bash
 aws ssm start-session \
@@ -133,7 +126,7 @@ O encaminhamento utiliza o [documento de port forwarding do Session Manager](htt
 
 ## Diagnóstico
 
-Se ocorrer `TargetNotConnected`, confira a região, a role da EC2, a saída HTTPS e a rota pelo NAT Gateway. Para verificar o serviço, abra a sessão interativa usando o comando de `ec2_session_manager_command` e execute:
+Se ocorrer `TargetNotConnected`, confira se o ID de destino corresponde ao output atual, se a EC2 está em execução, a região, a role da EC2, a saída HTTPS e a rota pelo NAT Gateway. Para verificar o serviço, abra a sessão interativa usando o comando de `ec2_session_manager_command` e execute:
 
 ```bash
 sudo systemctl status amazon-ssm-agent docker
